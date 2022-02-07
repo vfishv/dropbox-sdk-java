@@ -18,7 +18,7 @@ If you're using Maven, then edit your project's "pom.xml" and add this to the `<
 <dependency>
     <groupId>com.dropbox.core</groupId>
     <artifactId>dropbox-core-sdk</artifactId>
-    <version>5.1.0</version>
+    <version>5.1.1</version>
 </dependency>
 ```
 
@@ -27,7 +27,7 @@ If you are using Gradle, then edit your project's "build.gradle" and add this to
 ```groovy
 dependencies {
     // ...
-    implementation 'com.dropbox.core:dropbox-core-sdk:5.1.0'
+    implementation 'com.dropbox.core:dropbox-core-sdk:5.1.1'
 }
 ```
 
@@ -178,7 +178,7 @@ App key and secret can be found in you app page in [App Console](https://www.dro
 git clone https://github.com/dropbox/dropbox-sdk-java.git
 cd dropbox-sdk-java
 ./update-submodules    # also do this after every "git checkout"
-./gradlew build
+./gradlew build # requires `python` command to use Python 3
 ```
 
 The output will be in "build/".
@@ -316,8 +316,14 @@ Versions 2.0.0-2.0.3 of this SDK require SDK-specific ProGuard rules when shrink
 -dontwarn okio.**
 -dontwarn okhttp3.**
 -dontwarn com.squareup.okhttp.**
+-dontwarn com.google.apphosting.**
 -dontwarn com.google.appengine.**
+-dontwarn com.google.protos.cloud.sql.**
+-dontwarn com.google.cloud.sql.**
+-dontwarn javax.activation.**
+-dontwarn javax.mail.**
 -dontwarn javax.servlet.**
+-dontwarn org.apache.**
 ```
 
 **IMPORTANT: If you are running version 2.0.x before 2.0.3, you should update to the latest Dropbox SDK version to avoid a deserialization bug that can cause Android apps that use ProGuard to crash.**
