@@ -10,7 +10,7 @@ android {
     defaultConfig {
         applicationId "com.dropbox.dropboxexample"
         minSdkVersion 23
-        targetSdkVersion 29 //https://github.com/dropbox/dropbox-sdk-java/issues/321
+        targetSdkVersion 30 //https://github.com/dropbox/dropbox-sdk-java/issues/321
         versionCode 1
         versionName "1.0"
 
