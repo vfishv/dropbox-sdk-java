@@ -1,0 +1,28 @@
+plugins {
+    id "org.jetbrains.kotlinx.binary-compatibility-validator"
+    alias(dropboxJavaSdkLibs.plugins.maven.publish.plugin)
+    alias(dropboxJavaSdkLibs.plugins.gradle.version.plugin)
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+    alias(dropboxJavaSdkLibs.plugins.dependency.guard)
+}
+
+android {
+    compileSdk 33
+    defaultConfig {
+        minSdk 21
+        targetSdk 33
+    }
+
+    kotlinOptions {
+        freeCompilerArgs += '-Xexplicit-api=strict'
+    }
+}
+
+dependencies {
+    api(project(path: ":dropbox-sdk-java", configuration: "withoutOsgi"))
+}
+
+dependencyGuard {
+    configuration("releaseRuntimeClasspath")
+}

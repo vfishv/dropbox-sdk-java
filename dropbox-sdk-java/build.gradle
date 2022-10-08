@@ -1,0 +1,308 @@
+import com.dropbox.stone.java.model.ClientSpec
+import com.dropbox.stone.java.model.StoneConfig
+
+plugins {
+    id 'java-library'
+    id "com.github.blindpirate.osgi"
+    id "org.jetbrains.kotlin.jvm"
+    id "com.vanniktech.maven.publish"
+    id "com.github.ben-manes.versions"
+    id "com.dropbox.dependency-guard"
+    id "com.dropbox.stone.java"
+    id "org.jetbrains.kotlinx.binary-compatibility-validator"
+}
+
+dependencyGuard {
+    configuration("runtimeClasspath")
+}
+
+sourceCompatibility = JavaVersion.VERSION_11
+targetCompatibility = JavaVersion.VERSION_11
+
+ext {
+    mavenName = 'Official Dropbox Java SDK'
+    generatedSources = file("$buildDir/generated-sources")
+    generatedResources = file("$buildDir/generated-resources")
+    authInfoPropertyName = 'com.dropbox.test.authInfoFile'
+}
+
+sourceSets {
+    main {
+        java {
+            // Including the Android Code this way until it is later released as a separate artifact
+            srcDir '../dropbox-sdk-android/src/main/java'
+        }
+    }
+}
+
+dependencies {
+    api(dropboxJavaSdkLibs.jackson.core)
+
+    // Android
+    compileOnly 'com.google.android:android:4.1.1.4' // Until 6.x when we have an Android Artifact
+    compileOnly(dropboxJavaSdkLibs.kotlin.stdlib) // Only used in Android Code
+
+    compileOnly(dropboxJavaSdkLibs.servlet.api)
+    compileOnly(dropboxJavaSdkLibs.okhttp2)  // support both v2 and v3 to avoid
+    compileOnly(dropboxJavaSdkLibs.okhttp3) // method count bloat
+    compileOnly(dropboxJavaSdkLibs.appengine.api)
+
+    testImplementation 'org.testng:testng:6.9.10'
+    testImplementation 'org.mockito:mockito-core:1.10.19'
+    testImplementation 'org.openjdk.jmh:jmh-core:1.12'
+    testImplementation 'org.openjdk.jmh:jmh-generator-annprocess:1.12'
+    testImplementation 'com.google.appengine:appengine-api-1.0-sdk:1.9.38'
+    testImplementation 'com.google.appengine:appengine-api-labs:1.9.38'
+    testImplementation 'com.google.appengine:appengine-api-stubs:1.9.38'
+    testImplementation 'com.google.appengine:appengine-testing:1.9.38'
+    testImplementation 'com.squareup.okhttp:okhttp:2.7.5'
+    testImplementation 'com.squareup.okhttp3:okhttp:4.0.0'
+    testImplementation 'com.google.guava:guava:19.0'
+    testImplementation "com.google.truth:truth:1.1.2"
+}
+
+configurations {
+    withoutOsgi.extendsFrom api
+}
+
+processResources { task ->
+    filesMatching('**/*.crt') { fcd ->
+        def inputstream = fcd.open()
+        def certDatas = com.dropbox.maven.pem_converter.PemLoader.load(
+                new InputStreamReader(inputstream, "UTF-8")
+        )
+        inputstream.close()
+
+        def crtPath = fcd.getPath()
+        def rawPath = crtPath.substring(0, crtPath.length() - 4) + ".raw"
+        def rawFile = new File(task.getDestinationDir(), rawPath);
+        rawFile.getParentFile().mkdirs();
+        def out = new DataOutputStream(new FileOutputStream(rawFile))
+        com.dropbox.maven.pem_converter.RawLoader.store(certDatas, out)
+        out.close()
+
+        fcd.exclude()
+    }
+}
+
+compileJava {
+    options.compilerArgs << '-Xlint:all'
+    options.warnings = true
+    options.deprecation = true
+    options.encoding = 'utf-8'
+}
+
+test {
+    useTestNG()
+
+    // TestNG specific options
+    options.parallel 'methods'
+    options.threadCount 4
+
+    // exclude integration tests
+    exclude '**/IT*.class'
+    exclude '**/*IT.class'
+    exclude '**/*IT$*.class'
+
+    testLogging {
+        showStandardStreams = true // System.out.println
+    }
+}
+
+def getAuthInfoFile() {
+    if (!project.hasProperty(authInfoPropertyName)) {
+        throw new GradleException('' +
+                "These tests require the \"${authInfoPropertyName}\" " +
+                "project property be set to point to an authorization JSON file " +
+                "(e.g. ./gradlew integrationTest -P${authInfoPropertyName}=auth.json)."
+        )
+    }
+
+    def authInfoFile = file(project.property(authInfoPropertyName))
+    if (!authInfoFile.exists()) {
+        throw new GradleException('' +
+                "The test auth info file does not exist: \"${authInfoFile.absolutePath}\". " +
+                "Please ensure the \"${authInfoPropertyName}\" project property is set to point to " +
+                "the correct authorization JSON file."
+        )
+    }
+    return authInfoFile
+}
+
+task integrationTest(type: Test) {
+    description 'Runs integration tests against Production or Dev servers.'
+
+    useTestNG()
+
+    // only select integration tests (similar to maven-failsafe-plugin rules)
+    include '**/IT*.class'
+    include '**/*IT.class'
+    include '**/*IT$*.class'
+
+    exclude '**/*V1IT.class'
+    exclude '**/*V1IT$*.class'
+
+    testLogging {
+        showStandardStreams = true // System.out.println
+    }
+
+    reports {
+        html {
+            destination = file("${buildDir}/reports/integration-tests")
+        }
+    }
+
+    ext {
+        authInfoPropertyName = 'com.dropbox.test.authInfoFile'
+        httpRequestorPropertyName = 'com.dropbox.test.httpRequestor'
+    }
+
+    doFirst {
+        systemProperty authInfoPropertyName, getAuthInfoFile().absolutePath
+        if (project.hasProperty(httpRequestorPropertyName)) {
+            systemProperty httpRequestorPropertyName, project.property(httpRequestorPropertyName)
+        }
+    }
+
+    // Will ensure that integration tests are re-run every time because they are not hermetic
+    outputs.upToDateWhen { false }
+}
+
+javadoc {
+    String versionName
+    if (project.hasProperty("VERSION_NAME")) {
+        versionName = "${project.property("VERSION_NAME")}"
+    } else {
+        versionName = ""
+    }
+
+    title "${project.mavenName} ${versionName} API"
+    failOnError true
+
+    // JDK 8's javadoc has an on-by-default lint called "missing", which requires that everything
+    // be documented. Disable this lint because we intentionally don't document some things.
+    //
+    // NOTE: ugly hack to set our doclint settings due to strange handling of string options by the
+    // javadoc task.
+    if (JavaVersion.current().isJava8Compatible()) {
+        options.addBooleanOption "Xdoclint:all,-missing", true
+    }
+    options.addBooleanOption('-no-module-directories', true)
+    options.addStringOption "link", "http://docs.oracle.com/javase/6/docs/api/"
+}
+
+jar {
+    // OsgiManifest since we import 'osgi' plugin
+    manifest {
+        name project.name
+        description project.description
+        license 'http://opensource.org/licenses/MIT'
+        instruction 'Import-Package',
+                'android.*;resolution:=optional',
+                'com.google.appengine.*;resolution:=optional',
+                'com.squareup.okhttp;resolution:=optional',
+                'okhttp3;resolution:=optional',
+                'okio;resolution:=optional',
+                '*'
+
+        def noeeProp = 'osgi.bnd.noee'
+        def noee = providers.gradleProperty(noeeProp).forUseAtConfigurationTime().getOrElse(
+                providers.systemProperty(noeeProp).forUseAtConfigurationTime().getOrElse('false')
+        )
+        instruction '-noee', noee
+    }
+}
+
+task jarWithoutOsgi(type: Jar, dependsOn: classes) {
+    classifier 'withoutOsgi'
+    from sourceSets.main.output
+}
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+artifacts {
+    archives sourcesJar
+    archives javadocJar
+    withoutOsgi jarWithoutOsgi
+}
+
+// reject dependencyUpdates candidates with alpha or beta in their names:
+dependencyUpdates.resolutionStrategy = {
+    componentSelection { rules ->
+        rules.all { ComponentSelection selection ->
+            boolean rejected = ['alpha', 'beta', 'rc'].any { qualifier ->
+                selection.candidate.version ==~ /(?i).*[.-]${qualifier}[.\d-]*/
+            }
+            if (rejected) {
+                selection.reject('Release candidate')
+            }
+        }
+    }
+}
+
+generateStone {
+    String unusedClassesToGenerate = 'AuthError, PathRoot, PathRootError, AccessError, RateLimitError'
+    String packageName = 'com.dropbox.core.v2'
+    String globalRouteFilter = 'alpha_group=null and beta_group=null'
+    config[
+            new StoneConfig(
+                    packageName: packageName,
+                    globalRouteFilter: globalRouteFilter,
+                    client: new ClientSpec(
+                            name: 'DbxClientV2Base',
+                            javadoc: 'Base class for user auth clients.',
+                            requestsClassnamePrefix: "DbxUser",
+                            routeFilter: 'auth="user" or auth="noauth" or auth="app, user"',
+                            unusedClassesToGenerate: unusedClassesToGenerate,
+                    ),
+            ),
+            new StoneConfig(
+                    packageName: packageName,
+                    globalRouteFilter: globalRouteFilter,
+                    client: new ClientSpec(
+                            name: 'DbxTeamClientV2Base',
+                            javadoc: 'Base class for team auth clients.',
+                            requestsClassnamePrefix: 'DbxTeam',
+                            routeFilter: 'auth="team"',
+                    ),
+            ),
+            new StoneConfig(
+                    packageName: packageName,
+                    globalRouteFilter: globalRouteFilter,
+                    client: new ClientSpec(
+                            name: 'DbxAppClientV2Base',
+                            javadoc: 'Base class for app auth clients.',
+                            requestsClassnamePrefix: "DbxApp",
+                            routeFilter: 'auth="app" or auth="app, user"',
+                    )
+            ),
+
+    ]
+}
+
+generateTestStone {
+    String packageName = 'com.dropbox.core.stone'
+    config[
+            new StoneConfig(
+                    packageName: packageName,
+                    dataTypesOnly: true,
+            ),
+            new StoneConfig(
+                    packageName: packageName,
+                    client: new ClientSpec(
+                            name: 'DbxClientV2Base',
+                            javadoc: 'TestClass.',
+                            requestsClassnamePrefix: "DbxTest",
+                    )
+            ),
+    ]
+}

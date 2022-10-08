@@ -1,0 +1,19 @@
+include ':proguard'
+include ':dropbox-sdk-java'
+include ':examples:android'
+include ':examples:examples'
+include ':examples:java'
+
+dependencyResolutionManagement {
+    versionCatalogs {
+        dropboxJavaSdkLibs {
+            from(files("gradle/dropboxJavaSdkLibs.versions.toml"))
+        }
+    }
+}
+
+includeBuild("stone-java-gradle-plugin") {
+    dependencySubstitution {
+        substitute module('com.dropbox.gradle.plugins:stone-java-gradle-plugin')
+    }
+}

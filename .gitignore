@@ -12,7 +12,7 @@ intellij/
 *.iml
 local.properties
 
-# Output file when rendering ReadMe.md locally.
+# Output file when rendering README.md locally.
 /ReadMe.html
 
 # editor temp files
@@ -26,3 +26,6 @@ classyshark*
 
 # macOS
 *.DS_Store
+
+# Integration Test Auth Info
+auth_output

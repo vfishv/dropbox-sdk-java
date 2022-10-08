@@ -1,34 +1,28 @@
-apply plugin: 'com.android.application'
-
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
-    }
-    dependencies {
-        classpath "com.android.tools.build:gradle:7.0.3"
-        classpath 'com.getkeepsafe.dexcount:dexcount-gradle-plugin:3.0.1'
-    }
-}
-
-allprojects {
-    repositories {
-        google()
-        mavenLocal()
-        mavenCentral()
-    }
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    alias(dropboxJavaSdkLibs.plugins.dependency.guard)
 }
 
 android {
-    compileSdkVersion 31
-    buildToolsVersion "30.0.3"
+    compileSdkVersion 33
+    buildToolsVersion "33.0.0"
 
     defaultConfig {
         applicationId "com.dropbox.core.examples.android"
-        minSdkVersion 19
-        targetSdkVersion 30
+        minSdkVersion 21
+        targetSdkVersion 33
         versionCode 1
         versionName "1.0"
+
+        Properties localProperties = getLocalProperties()
+        String dropboxKey = localProperties['DROPBOX_APP_KEY']
+        if (dropboxKey == null) {
+            logger.warn("No value provided for DROPBOX_APP_KEY.  Specify a value in a examples/android/local.properties file. You can register for one at https://developers.dropbox.com/")
+            dropboxKey = "PUT_YOUR_APP_KEY_HERE"
+        }
+        buildConfigField "String", "DROPBOX_APP_KEY", "\"${dropboxKey}\""
+        manifestPlaceholders = [dropboxKey: dropboxKey]
     }
 
     buildTypes {
@@ -38,9 +32,8 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
-            // to debug ProGuard rules
-            minifyEnabled true
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules-debug.pro'
+            minifyEnabled false
+            shrinkResources false
         }
     }
 
@@ -55,15 +48,47 @@ android {
         disable 'InvalidPackage'
         abortOnError false
     }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
 }
 
 dependencies {
-    implementation project("dropbox-sdk-java")
-    implementation 'androidx.appcompat:appcompat:1.1.0'
-    implementation 'com.google.android.material:material:1.1.0'
-    implementation 'androidx.recyclerview:recyclerview:1.1.0'
-    implementation 'com.squareup.picasso:picasso:2.71828'
-    api 'com.squareup.okhttp3:okhttp:4.4.0'
+    implementation(project(":dropbox-sdk-java"))
+
+    implementation(dropboxJavaSdkLibs.kotlin.stdlib)
+    implementation(dropboxJavaSdkLibs.kotlin.coroutines)
+
+    implementation(dropboxJavaSdkLibs.androidx.appcompat)
+    implementation(dropboxJavaSdkLibs.androidx.recyclerview)
+    implementation(dropboxJavaSdkLibs.androidx.core.ktx)
+    implementation(dropboxJavaSdkLibs.androidx.constraintlayout)
+    implementation(dropboxJavaSdkLibs.androidx.lifecycle.runtime.ktx)
+    implementation(dropboxJavaSdkLibs.android.material)
+
+    implementation(dropboxJavaSdkLibs.glide)
+
+    implementation(dropboxJavaSdkLibs.okhttp3)
+
+    testImplementation(dropboxJavaSdkLibs.test.junit)
+
+    androidTestImplementation(dropboxJavaSdkLibs.androidx.test.junit)
+    androidTestImplementation(dropboxJavaSdkLibs.androidx.test.espresso.core)
 }
 
-apply plugin: 'com.getkeepsafe.dexcount'
+def getLocalProperties() {
+    Properties props = new Properties()
+    if (file('local.properties').exists()) {
+        props.load(new FileInputStream(file('local.properties')))
+    }
+    return props
+}
+
+dependencyGuard {
+    configuration("releaseRuntimeClasspath")
+}
