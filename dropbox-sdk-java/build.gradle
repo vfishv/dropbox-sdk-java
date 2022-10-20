@@ -16,8 +16,8 @@ dependencyGuard {
     configuration("runtimeClasspath")
 }
 
-sourceCompatibility = JavaVersion.VERSION_11
-targetCompatibility = JavaVersion.VERSION_11
+sourceCompatibility = JavaVersion.VERSION_1_8
+targetCompatibility = JavaVersion.VERSION_1_8
 
 ext {
     mavenName = 'Official Dropbox Java SDK'
@@ -203,6 +203,7 @@ jar {
                 'com.squareup.okhttp;resolution:=optional',
                 'okhttp3;resolution:=optional',
                 'okio;resolution:=optional',
+                'kotlin.*;resolution:=optional',
                 '*'
 
         def noeeProp = 'osgi.bnd.noee'
